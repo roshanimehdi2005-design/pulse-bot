@@ -317,6 +317,24 @@ def handle(msg):
     s = state.get(cid)
     if not s:
         send(cid, 'برای شروع /start رو بزن.'); return
+
+    # Lead CTA must be handled before question routing. This prevents the final
+    # keyboard button from being swallowed when the questionnaire index is complete.
+    if text.strip() == '🚀 درخواست بررسی مسیر' and s.get('recs'):
+        s['lead_requested'] = True
+        s['telegram_username'] = msg.get('from', {}).get('username', s.get('telegram_username', ''))
+        s['telegram_id'] = cid
+        save(cid, msg, s.get('phone', ''), s['d'], s['recs'], s['scores'], s['reasons'], s['tags'])
+        username_line = f'🔗 @{s["telegram_username"]}' if s.get('telegram_username') else '🔗 username: ندارد'
+        admin_text = summary(msg, s.get('phone', ''), s['d'], s['recs'], s['scores'], s['reasons'], s['tags'], s['confidence'])
+        admin_text += f'\n\n📥 درخواست بررسی مسیر: بله\n🆔 Telegram ID: {s["telegram_id"]}\n{username_line}'
+        send(cid, '✅ درخواستت ثبت شد.\n\nاطلاعاتت به تیم PULSE رسید و مسیرت برای بررسی دقیق‌تر در نظر گرفته می‌شه.\n\n📞 شماره تماس و آیدی تلگرامت هم برای ارتباط با تیم ثبت شد.\n\n🚀 به‌زودی باهات ارتباط می‌گیریم.', rm())
+        for aid in ADMIN_CHAT_IDS:
+            try:
+                send(aid, admin_text)
+            except Exception:
+                logging.exception('lead request admin notification failed')
+        return
     if msg.get('contact'):
         c = msg['contact']; uid = msg.get('from', {}).get('id')
         if c.get('user_id') and c['user_id'] != uid:
@@ -368,19 +386,6 @@ def handle(msg):
     if text == '🔎 جزئیات مسیر' and s['recs']:
         p = PACKAGES[s['recs'][0]]
         send(cid, f'{p["title"]}\n\n{p["desc"]}\n\n' + '\n'.join('✓ ' + x for x in p['features']) + '\n\n💡 قیمت و شرایط نهایی ثابت نیست و بعد از بررسی شرایطت باهات هماهنگ می‌شه.')
-        return
-    if text == '🚀 درخواست بررسی مسیر' and s['recs']:
-        s['lead_requested'] = True
-        s['telegram_username'] = msg.get('from', {}).get('username', s.get('telegram_username', ''))
-        s['telegram_id'] = cid
-        save(cid, msg, s['phone'], s['d'], s['recs'], s['scores'], s['reasons'], s['tags'])
-        username_line = f'🔗 @{s["telegram_username"]}' if s.get('telegram_username') else '🔗 username: ندارد'
-        admin_text = summary(msg, s['phone'], s['d'], s['recs'], s['scores'], s['reasons'], s['tags'], s['confidence'])
-        admin_text += f'\n\n📥 درخواست بررسی مسیر: بله\n🆔 Telegram ID: {s["telegram_id"]}\n{username_line}'
-        send(cid, '✅ درخواستت ثبت شد.\n\nاطلاعاتت به تیم PULSE رسید و مسیرت برای بررسی دقیق‌تر در نظر گرفته می‌شه.\n\n📞 شماره تماس و آیدی تلگرامت هم برای ارتباط با تیم ثبت شد.\n\n🚀 به‌زودی باهات ارتباط می‌گیریم.', rm())
-        for aid in ADMIN_CHAT_IDS:
-            try: send(aid, admin_text)
-            except Exception: logging.exception('contact request failed')
         return
     if text == '🔄 شروع دوباره':
         state.pop(cid, None); send(cid, 'حتماً. /start رو بزن. 👋'); return
